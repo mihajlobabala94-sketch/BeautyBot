@@ -10,6 +10,7 @@ from handlers.contacts import router as contacts_router
 from handlers.reviews import router as reviews_router
 from handlers.booking import router as booking_router
 from handlers.admin import router as admin_router
+from handlers.price import router as price_router
 
 from database.database import create_database, seed_slots
 
@@ -24,6 +25,8 @@ dp.include_router(contacts_router)
 dp.include_router(reviews_router)
 dp.include_router(booking_router)
 dp.include_router(admin_router)
+dp.include_router(price_router)
+
 
 
 async def main():
