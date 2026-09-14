@@ -46,13 +46,10 @@ MASTER_ID = 1132869946
 
 class AdminState(StatesGroup):
 
-    # Додавання вільного часу
+
+    #Додавання вільного часу 
     add_date = State()
     add_time = State()
-
-    # Видалення вільного часу
-    delete_date = State()
-    delete_time = State()
 
     # Створення запису
     booking_name = State()
@@ -210,7 +207,6 @@ async def add_slot_time(
         reply_markup=admin_keyboard
     )
 
-
 # =========================================================
 # 📅 ПЕРЕГЛЯНУТИ ВІЛЬНИЙ ЧАС
 # =========================================================
@@ -220,7 +216,6 @@ async def show_free_slots(
     message: Message,
     state: FSMContext
 ):
-
     if not is_admin(message):
         return
 
@@ -229,45 +224,112 @@ async def show_free_slots(
     dates = get_free_dates()
 
     if not dates:
-
         await message.answer(
             "😔 Вільних слотів немає.",
             reply_markup=admin_keyboard
         )
-
         return
 
-    for date in dates:
-
-        times = get_free_times(date)
-
-        if not times:
-            continue
-
-        for time in times:
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text="🗑 Видалити",
-                            callback_data=(
-                                f"delete_free:{date}:{time}"
-                            )
-                        )
-                    ]
-                ]
-            )
-
-            await message.answer(
-                f"📅 {date}\n"
-                f"🕐 {time}",
-                reply_markup=keyboard
-            )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"📅 {date}",
+                    callback_data=f"free_date|{date}"
+                )
+            ]
+            for date in dates
+        ]
+    )
 
     await message.answer(
-        "🔐 Адмін-панель",
-        reply_markup=admin_keyboard
+        "📅 <b>Календар вільного часу</b>\n\n"
+        "Оберіть дату:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+
+# =========================================================
+# 📅 ВИБІР ДАТИ
+# =========================================================
+
+@router.callback_query(
+    F.data.startswith("free_date|")
+)
+async def show_free_times(
+    callback: CallbackQuery
+):
+    if callback.from_user.id != MASTER_ID:
+        await callback.answer(
+            "⛔ Немає доступу.",
+            show_alert=True
+        )
+        return
+
+    date = callback.data.split("|", 1)[1]
+
+    times = get_free_times(date)
+
+    if not times:
+        await callback.answer(
+            "❌ На цю дату немає вільного часу.",
+            show_alert=True
+        )
+        return
+
+    keyboard_rows = []
+
+    for time in times:
+        keyboard_rows.append([
+            InlineKeyboardButton(
+                text=f"🕐 {time}",
+                callback_data=f"free_info|{date}|{time}"
+            ),
+            InlineKeyboardButton(
+                text="🗑",
+                callback_data=f"free_delete|{date}|{time}"
+            )
+        ])
+
+    keyboard_rows.append([
+        InlineKeyboardButton(
+            text="⬅️ До дат",
+            callback_data="free_back_dates"
+        )
+    ])
+
+    await callback.message.edit_text(
+        f"📅 <b>{date}</b>\n\n"
+        "🕐 <b>Вільні години:</b>\n\n"
+        "Натисніть 🗑 біля потрібної години.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=keyboard_rows
+        ),
+        parse_mode="HTML"
+    )
+
+    await callback.answer()
+
+
+# =========================================================
+# 🕐 ІНФОРМАЦІЯ ПРО ГОДИНУ
+# =========================================================
+
+@router.callback_query(
+    F.data.startswith("free_info|")
+)
+async def free_time_info(
+    callback: CallbackQuery
+):
+    parts = callback.data.split("|", 2)
+
+    date = parts[1]
+    time = parts[2]
+
+    await callback.answer(
+        f"📅 {date}\n🕐 {time}",
+        show_alert=True
     )
 
 
@@ -276,12 +338,11 @@ async def show_free_slots(
 # =========================================================
 
 @router.callback_query(
-    F.data.startswith("delete_free:")
+    F.data.startswith("free_delete|")
 )
 async def delete_free_start(
     callback: CallbackQuery
 ):
-
     if callback.from_user.id != MASTER_ID:
         await callback.answer(
             "⛔ Немає доступу.",
@@ -289,7 +350,7 @@ async def delete_free_start(
         )
         return
 
-    parts = callback.data.split(":")
+    parts = callback.data.split("|", 2)
 
     date = parts[1]
     time = parts[2]
@@ -299,293 +360,170 @@ async def delete_free_start(
             [
                 InlineKeyboardButton(
                     text="✅ Так, видалити",
-                    callback_data=f"delete_free_yes:{date}:{time}"
+                    callback_data=f"free_delete_yes|{date}|{time}"
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="↩️ Ні",
-                    callback_data="delete_free_no"
+                    callback_data=f"free_delete_no|{date}|{time}"
                 )
             ]
         ]
     )
-
-    await callback.message.edit_reply_markup(
-        reply_markup=keyboard
-    )
-
-    await callback.answer(
-        "Ти точно хочеш видалити цей час?"
-    )
-
-
-# =========================================================
-# ✅ ПІДТВЕРДЖЕННЯ ВИДАЛЕННЯ
-# =========================================================
-
-@router.callback_query(
-    F.data.startswith("delete_free_yes:")
-)
-async def delete_free_confirm(
-    callback: CallbackQuery
-):
-
-    if callback.from_user.id != MASTER_ID:
-        await callback.answer(
-            "⛔ Немає доступу.",
-            show_alert=True
-        )
-        return
-
-    parts = callback.data.split(":")
-
-    date = parts[1]
-    time = parts[2]
-
-    # Видаляємо слот напряму з БД
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    cursor.execute(
-        """
-        DELETE FROM available_slots
-        WHERE date = ?
-        AND time = ?
-        AND is_booked = 0
-        """,
-        (date, time)
-    )
-
-    deleted = cursor.rowcount
-
-    conn.commit()
-    conn.close()
-
-    if deleted > 0:
-
-        await callback.message.edit_text(
-            "🗑 Вільний час видалено!\n\n"
-            f"📅 {date}\n"
-            f"🕐 {time}"
-        )
-
-        await callback.answer(
-            "Видалено ✅"
-        )
-
-    else:
-
-        await callback.answer(
-            "❌ Цей слот вже видалений.",
-            show_alert=True
-        )
-
-
-# =========================================================
-# ↩️ НЕ ВИДАЛЯТИ
-# =========================================================
-
-@router.callback_query(
-    F.data == "delete_free_no"
-)
-async def delete_free_no(
-    callback: CallbackQuery
-):
-
-    await callback.message.edit_reply_markup(
-        reply_markup=None
-    )
-
-    await callback.answer(
-        "Скасовано"
-    )
-
-
-# =========================================================
-# 🗑 СТАРЕ ВИДАЛЕННЯ ВІЛЬНОГО ЧАСУ
-# =========================================================
-
-@router.message(F.text == "🗑 Видалити вільний час")
-async def delete_slot_start(
-    message: Message,
-    state: FSMContext
-):
-
-    if not is_admin(message):
-        return
-
-    dates = get_free_dates()
-
-    if not dates:
-
-        await message.answer(
-            "😔 Вільних слотів немає.",
-            reply_markup=admin_keyboard
-        )
-
-        return
-
-    await state.clear()
-
-    await state.set_state(
-        AdminState.delete_date
-    )
-
-    await message.answer(
-        "📅 Введіть дату:\n\n"
-        + "\n".join(dates)
-    )
-
-
-@router.message(
-    AdminState.delete_date,
-    F.text != CLOSE_ADMIN
-)
-async def delete_slot_date(
-    message: Message,
-    state: FSMContext
-):
-
-    date = message.text
-
-    times = get_free_times(date)
-
-    if not times:
-
-        await message.answer(
-            "❌ На цю дату немає вільного часу.\n\n"
-            "Спробуйте іншу дату."
-        )
-
-        return
-
-    await state.update_data(
-        delete_date=date
-    )
-
-    await state.set_state(
-        AdminState.delete_time
-    )
-
-    await message.answer(
-        "🕐 Введіть час:\n\n"
-        + "\n".join(times)
-    )
-
-
-@router.message(
-    AdminState.delete_time,
-    F.text != CLOSE_ADMIN
-)
-async def delete_slot_time(
-    message: Message,
-    state: FSMContext
-):
-
-    data = await state.get_data()
-
-    date = data["delete_date"]
-    time = message.text
-
-    times = get_free_times(date)
-
-    if time not in times:
-
-        await message.answer(
-            "❌ Такого вільного часу немає."
-        )
-
-        return
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="✅ Так, видалити",
-                    callback_data=(
-                        f"delete_slot_yes:{date}:{time}"
-                    )
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="↩️ Ні",
-                    callback_data="delete_slot_no"
-                )
-            ]
-        ]
-    )
-
-    await message.answer(
-        "⚠️ Ви точно хочете видалити?\n\n"
-        f"📅 {date}\n"
-        f"🕐 {time}",
-        reply_markup=keyboard
-    )
-
-
-@router.callback_query(
-    F.data.startswith("delete_slot_yes:")
-)
-async def delete_slot_confirm(
-    callback: CallbackQuery,
-    state: FSMContext
-):
-
-    if callback.from_user.id != MASTER_ID:
-        return
-
-    parts = callback.data.split(":")
-
-    date = parts[1]
-    time = parts[2]
-
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        DELETE FROM available_slots
-        WHERE date = ?
-        AND time = ?
-        AND is_booked = 0
-    """, (
-        date,
-        time
-    ))
-
-    conn.commit()
-    conn.close()
-
-    await state.clear()
 
     await callback.message.edit_text(
-        "🗑 Вільний час видалено!\n\n"
+        "⚠️ <b>Видалити цей вільний час?</b>\n\n"
         f"📅 {date}\n"
-        f"🕐 {time}"
-    )
-
-    await callback.message.answer(
-        "🔐 Адмін-панель",
-        reply_markup=admin_keyboard
+        f"🕐 {time}",
+        reply_markup=keyboard,
+        parse_mode="HTML"
     )
 
     await callback.answer()
 
 
+# =========================================================
+# ✅ ПІДТВЕРДЖЕННЯ
+# =========================================================
+
 @router.callback_query(
-    F.data == "delete_slot_no"
+    F.data.startswith("free_delete_yes|")
 )
-async def delete_slot_cancel(
+async def delete_free_confirm(
     callback: CallbackQuery
 ):
+    if callback.from_user.id != MASTER_ID:
+        await callback.answer(
+            "⛔ Немає доступу.",
+            show_alert=True
+        )
+        return
 
-    await callback.message.delete()
+    parts = callback.data.split("|", 2)
 
-    await callback.answer(
-        "Скасовано"
+    date = parts[1]
+    time = parts[2]
+
+    deleted = delete_free_slot(
+        date,
+        time
     )
 
+    if not deleted:
+        await callback.answer(
+            "❌ Слот не знайдено або він уже зайнятий.",
+            show_alert=True
+        )
+        return
+
+    await callback.message.edit_text(
+        "✅ <b>Вільний час видалено!</b>\n\n"
+        f"📅 {date}\n"
+        f"🕐 {time}",
+        parse_mode="HTML"
+    )
+
+    await callback.answer(
+        "Видалено ✅"
+    )
+
+
+# =========================================================
+# ↩️ СКАСУВАТИ ВИДАЛЕННЯ
+# =========================================================
+
+@router.callback_query(
+    F.data.startswith("free_delete_no|")
+)
+async def delete_free_no(
+    callback: CallbackQuery
+):
+    parts = callback.data.split("|", 2)
+
+    date = parts[1]
+
+    times = get_free_times(date)
+
+    if not times:
+        await callback.message.edit_text(
+            "😔 Вільного часу більше немає."
+        )
+        await callback.answer()
+        return
+
+    keyboard_rows = []
+
+    for time in times:
+        keyboard_rows.append([
+            InlineKeyboardButton(
+                text=f"🕐 {time}",
+                callback_data=f"free_info|{date}|{time}"
+            ),
+            InlineKeyboardButton(
+                text="🗑",
+                callback_data=f"free_delete|{date}|{time}"
+            )
+        ])
+
+    keyboard_rows.append([
+        InlineKeyboardButton(
+            text="⬅️ До дат",
+            callback_data="free_back_dates"
+        )
+    ])
+
+    await callback.message.edit_text(
+        f"📅 <b>{date}</b>\n\n"
+        "🕐 <b>Вільні години:</b>",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=keyboard_rows
+        ),
+        parse_mode="HTML"
+    )
+
+    await callback.answer("Скасовано")
+
+
+# =========================================================
+# ⬅️ НАЗАД ДО ДАТ
+# =========================================================
+
+@router.callback_query(
+    F.data == "free_back_dates"
+)
+async def free_back_dates(
+    callback: CallbackQuery
+):
+    dates = get_free_dates()
+
+    if not dates:
+        await callback.message.edit_text(
+            "😔 Вільних слотів більше немає."
+        )
+        await callback.answer()
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"📅 {date}",
+                    callback_data=f"free_date|{date}"
+                )
+            ]
+            for date in dates
+        ]
+    )
+
+    await callback.message.edit_text(
+        "📅 <b>Календар вільного часу</b>\n\n"
+        "Оберіть дату:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+    await callback.answer()
 
 # =========================================================
 # 📋 ПЕРЕГЛЯНУТИ ЗАПИСИ
