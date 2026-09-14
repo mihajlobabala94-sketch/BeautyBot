@@ -1,0 +1,28 @@
+{
+	"folders": [
+		{
+			"path": ".venv"
+		},
+		{
+			"path": "config"
+		},
+		{
+			"path": "database"
+		},
+		{
+			"path": "handlers"
+		},
+		{
+			"path": "keyboards"
+		},
+		{
+			"path": "services"
+		},
+		{
+			"path": "states"
+		},
+		{
+			"path": "utils"
+		}
+	]
+}
