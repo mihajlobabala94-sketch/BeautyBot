@@ -375,6 +375,24 @@ def get_free_times(date):
 
     return [x[0] for x in times]
 
+def get_free_slots(date):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, time
+        FROM available_slots
+        WHERE date = ?
+        AND is_booked = 0
+        ORDER BY time
+    """, (date,))
+
+    slots = cursor.fetchall()
+
+    conn.close()
+
+    return slots
+
 
 def book_slot(date, time):
     conn = get_connection()
