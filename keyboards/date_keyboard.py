@@ -1,4 +1,4 @@
-from aiogram.types import ReplyKeyboardMarkup
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 
@@ -10,8 +10,10 @@ def get_dates_keyboard(dates: list[str]) -> ReplyKeyboardMarkup:
 
     builder.adjust(2)
 
-    builder.button(text="⬅️ Назад")
-    builder.button(text="❌ Скасувати")
+    builder.row(
+        KeyboardButton(text="⬅️ Назад"),
+        KeyboardButton(text="❌ Скасувати")
+    )
 
     return builder.as_markup(
         resize_keyboard=True

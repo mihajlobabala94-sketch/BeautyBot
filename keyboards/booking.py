@@ -10,6 +10,9 @@ phone_keyboard = ReplyKeyboardMarkup(
                 text="📱 Поділитися номером",
                 request_contact=True
             )
+        ],
+        [
+            KeyboardButton(text="❌ Скасувати")
         ]
     ],
     resize_keyboard=True,
