@@ -16,6 +16,9 @@ admin_keyboard = ReplyKeyboardMarkup(
             KeyboardButton(text="📅 Переглянути вільний час")
         ],
         [
+            KeyboardButton(text="📸 Фото клієнтів")
+        ],
+        [
             KeyboardButton(text="⚙️ Налаштувати графік"),
             KeyboardButton(text="🔄 Згенерувати на 30 днів")
         ],

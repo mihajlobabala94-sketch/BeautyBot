@@ -1,3 +1,4 @@
+
 import logging
 import re
 
@@ -15,7 +16,12 @@ from database.database import (
     add_booking,
     book_slot
 )
-from keyboards.booking import phone_keyboard, service_keyboard
+from keyboards.booking import (
+    phone_keyboard,
+    service_keyboard,
+    previous_brows_keyboard,
+    photo_keyboard
+)
 from keyboards.date_keyboard import get_dates_keyboard
 from keyboards.menu import main_menu
 from keyboards.time_keyboard import get_times_keyboard
@@ -33,6 +39,7 @@ router = Router()
 @router.message(StateFilter("*"), F.text == "❌ Скасувати")
 async def cancel(message: Message, state: FSMContext):
     await state.clear()
+
     await message.answer(
         "❌ Запис скасовано.",
         reply_markup=main_menu
@@ -42,6 +49,7 @@ async def cancel(message: Message, state: FSMContext):
 @router.message(StateFilter("*"), Command("cancel"))
 async def cancel_cmd(message: Message, state: FSMContext):
     await state.clear()
+
     await message.answer(
         "❌ Дію скасовано.",
         reply_markup=main_menu
@@ -82,16 +90,96 @@ async def booking_start(message: Message, state: FSMContext):
 @router.message(BookingState.name, F.text)
 async def get_name(message: Message, state: FSMContext):
     name = message.text.strip()
+
     if len(name) < 2:
-        await message.answer("⚠️ Будь ласка, введіть коректне ім'я:")
+        await message.answer(
+            "⚠️ Будь ласка, введіть коректне ім'я:"
+        )
         return
 
     await state.update_data(name=name)
+
+    await state.set_state(BookingState.previous_brows)
+
+    await message.answer(
+        "🤎 Чи робили ви раніше брови?",
+        reply_markup=previous_brows_keyboard
+    )
+
+
+# =========================
+# Попередній досвід з бровами
+# =========================
+
+@router.message(BookingState.previous_brows, F.text)
+async def previous_brows(message: Message, state: FSMContext):
+
+    if message.text == "❌ Скасувати":
+        await state.clear()
+
+        await message.answer(
+            "❌ Запис скасовано.",
+            reply_markup=main_menu
+        )
+        return
+
+    if message.text == "❌ Ні":
+        await state.set_state(BookingState.phone)
+
+        await message.answer(
+            "📱 Поділіться номером телефону за допомогою кнопки нижче "
+            "або введіть його вручну:",
+            reply_markup=phone_keyboard
+        )
+        return
+
+    if message.text == "✅ Так":
+        await state.set_state(BookingState.brow_photo)
+
+    await message.answer(
+        "📸 Надішліть, будь ласка, фото ваших брів.\n\n"
+        "Фото потрібне майстру, щоб заздалегідь оцінити стан брів.",
+        reply_markup=photo_keyboard
+    )
+    return
+
+    await message.answer(
+        "⚠️ Будь ласка, оберіть один із варіантів:",
+        reply_markup=previous_brows_keyboard
+    )
+
+
+# =========================
+# Фото брів
+# =========================
+
+@router.message(BookingState.brow_photo, F.photo)
+async def get_brow_photo(message: Message, state: FSMContext):
+
+    photo = message.photo[-1]
+
+    # Зберігаємо Telegram file_id фото
+    await state.update_data(
+        brow_photo=photo.file_id
+    )
+
+    # Переходимо до номера телефону
     await state.set_state(BookingState.phone)
 
     await message.answer(
-        "📱 Поділіться номером телефону за допомогою кнопки нижче або введіть його вручну:",
+        "✅ Фото отримано!\n\n"
+        "📱 Тепер поділіться номером телефону за допомогою кнопки нижче "
+        "або введіть його вручну:",
         reply_markup=phone_keyboard
+    )
+
+
+@router.message(BookingState.brow_photo)
+async def invalid_brow_photo(message: Message, state: FSMContext):
+
+    await message.answer(
+        "⚠️ Будь ласка, надішліть саме фото ваших брів 📸",
+        reply_markup=photo_keyboard
     )
 
 
@@ -101,12 +189,19 @@ async def get_name(message: Message, state: FSMContext):
 
 @router.message(BookingState.phone, F.contact)
 async def get_phone_contact(message: Message, state: FSMContext):
+
     phone = message.contact.phone_number
+
     if not phone.startswith("+"):
         phone = f"+{phone}"
 
-    await state.update_data(phone=phone)
-    await state.set_state(BookingState.service)
+    await state.update_data(
+        phone=phone
+    )
+
+    await state.set_state(
+        BookingState.service
+    )
 
     await message.answer(
         "💄 Оберіть процедуру:",
@@ -120,21 +215,41 @@ async def get_phone_contact(message: Message, state: FSMContext):
 
 @router.message(BookingState.phone, F.text)
 async def get_phone_text(message: Message, state: FSMContext):
+
     raw_text = message.text.strip()
-    digits = re.sub(r"\D", "", raw_text)
+
+    digits = re.sub(
+        r"\D",
+        "",
+        raw_text
+    )
 
     if len(digits) < 9:
         await message.answer(
             "⚠️ Номер телефону занадто короткий.\n"
-            "Введіть номер у форматі +380XXXXXXXXX або натисніть кнопку «📱 Поділитися номером»:",
+            "Введіть номер у форматі +380XXXXXXXXX "
+            "або натисніть кнопку «📱 Поділитися номером»:",
             reply_markup=phone_keyboard
         )
         return
 
-    phone = raw_text if raw_text.startswith("+") else (f"+{digits}" if len(digits) > 10 else f"+38{digits}")
+    phone = (
+        raw_text
+        if raw_text.startswith("+")
+        else (
+            f"+{digits}"
+            if len(digits) > 10
+            else f"+38{digits}"
+        )
+    )
 
-    await state.update_data(phone=phone)
-    await state.set_state(BookingState.service)
+    await state.update_data(
+        phone=phone
+    )
+
+    await state.set_state(
+        BookingState.service
+    )
 
     await message.answer(
         "💄 Оберіть процедуру:",
@@ -148,8 +263,12 @@ async def get_phone_text(message: Message, state: FSMContext):
 
 @router.message(BookingState.service, F.text)
 async def get_service(message: Message, state: FSMContext):
+
     service = message.text.strip()
-    await state.update_data(service=service)
+
+    await state.update_data(
+        service=service
+    )
 
     dates = get_free_dates()
 
@@ -159,10 +278,13 @@ async def get_service(message: Message, state: FSMContext):
             "Зверніться до майстра напряму в розділі «☎️ Контакти».",
             reply_markup=main_menu
         )
+
         await state.clear()
         return
 
-    await state.set_state(BookingState.date)
+    await state.set_state(
+        BookingState.date
+    )
 
     await message.answer(
         "📅 Оберіть зручну дату:",
@@ -176,8 +298,12 @@ async def get_service(message: Message, state: FSMContext):
 
 @router.message(BookingState.date, F.text)
 async def get_date(message: Message, state: FSMContext):
+
     if message.text == "⬅️ Назад":
-        await state.set_state(BookingState.service)
+        await state.set_state(
+            BookingState.service
+        )
+
         await message.answer(
             "💄 Оберіть процедуру:",
             reply_markup=service_keyboard
@@ -185,31 +311,45 @@ async def get_date(message: Message, state: FSMContext):
         return
 
     date = message.text.strip()
+
     free_dates = get_free_dates()
 
     if date not in free_dates:
         await message.answer(
             "⚠️ Будь ласка, оберіть дату зі списку запропонованих кнопок:",
-            reply_markup=get_dates_keyboard(free_dates) if free_dates else main_menu
+            reply_markup=(
+                get_dates_keyboard(free_dates)
+                if free_dates
+                else main_menu
+            )
         )
+
         if not free_dates:
             await state.clear()
+
         return
 
     times = get_free_times(date)
 
     if not times:
         await message.answer(
-            "😔 На цю дату вже немає вільного часу. Оберіть іншу дату:",
+            "😔 На цю дату вже немає вільного часу. "
+            "Оберіть іншу дату:",
             reply_markup=get_dates_keyboard(free_dates)
         )
         return
 
-    await state.update_data(date=date)
-    await state.set_state(BookingState.time)
+    await state.update_data(
+        date=date
+    )
+
+    await state.set_state(
+        BookingState.time
+    )
 
     await message.answer(
-        f"📅 Обрано дату: <b>{date}</b>\n🕒 Оберіть зручний час:",
+        f"📅 Обрано дату: <b>{date}</b>\n"
+        "🕒 Оберіть зручний час:",
         reply_markup=get_times_keyboard(times),
         parse_mode="HTML"
     )
@@ -221,21 +361,34 @@ async def get_date(message: Message, state: FSMContext):
 
 @router.message(BookingState.time, F.text)
 async def get_time(message: Message, state: FSMContext):
+
     data = await state.get_data()
+
     date = data.get("date")
 
     if message.text == "⬅️ Назад":
         dates = get_free_dates()
-        await state.set_state(BookingState.date)
+
+        await state.set_state(
+            BookingState.date
+        )
+
         await message.answer(
             "📅 Оберіть дату:",
-            reply_markup=get_dates_keyboard(dates) if dates else main_menu
+            reply_markup=(
+                get_dates_keyboard(dates)
+                if dates
+                else main_menu
+            )
         )
+
         if not dates:
             await state.clear()
+
         return
 
     time = message.text.strip()
+
     times = get_free_times(date)
 
     if time not in times:
@@ -247,38 +400,66 @@ async def get_time(message: Message, state: FSMContext):
 
     # Атомарна спроба забронювати слот
     if not book_slot(date, time):
+
         remaining_times = get_free_times(date)
+
         if remaining_times:
             await message.answer(
-                "😔 На жаль, цей час щойно забронював інший клієнт.\n"
+                "😔 На жаль, цей час щойно забронював "
+                "інший клієнт.\n"
                 "Будь ласка, оберіть інший час:",
-                reply_markup=get_times_keyboard(remaining_times)
+                reply_markup=get_times_keyboard(
+                    remaining_times
+                )
             )
         else:
             dates = get_free_dates()
-            await state.set_state(BookingState.date)
+
+            await state.set_state(
+                BookingState.date
+            )
+
             await message.answer(
                 "😔 На цю дату більше немає вільних годин.\n"
                 "Будь ласка, оберіть іншу дату:",
-                reply_markup=get_dates_keyboard(dates) if dates else main_menu
+                reply_markup=(
+                    get_dates_keyboard(dates)
+                    if dates
+                    else main_menu
+                )
             )
+
             if not dates:
                 await state.clear()
+
         return
 
-    await state.update_data(time=time)
+    await state.update_data(
+        time=time
+    )
+
     data = await state.get_data()
 
+    # =========================
     # Зберігаємо клієнта
+    # =========================
+
     client_id = add_client(
         telegram_id=message.from_user.id,
         name=data["name"],
-        phone=data["phone"]
+        phone=data["phone"],
+        photo_id=data.get("brow_photo")
     )
-    if not client_id:
-        client_id = get_client_id(message.from_user.id)
 
+    if not client_id:
+        client_id = get_client_id(
+            message.from_user.id
+        )
+
+    # =========================
     # Зберігаємо бронювання
+    # =========================
+
     add_booking(
         client_id=client_id,
         service=data["service"],
@@ -286,8 +467,16 @@ async def get_time(message: Message, state: FSMContext):
         time=data["time"]
     )
 
+    # =========================
     # Повідомляємо майстра
-    username = f"@{message.from_user.username}" if message.from_user.username else "не вказано"
+    # =========================
+
+    username = (
+        f"@{message.from_user.username}"
+        if message.from_user.username
+        else "не вказано"
+    )
+
     try:
         await message.bot.send_message(
             MASTER_ID,
@@ -300,10 +489,16 @@ async def get_time(message: Message, state: FSMContext):
             f"📲 <b>Telegram:</b> {username}",
             parse_mode="HTML"
         )
-    except Exception as e:
-        logger.error(f"Не вдалося надіслати сповіщення майстру: {e}")
 
+    except Exception as e:
+        logger.error(
+            f"Не вдалося надіслати сповіщення майстру: {e}"
+        )
+
+    # =========================
     # Підтвердження клієнту
+    # =========================
+
     await message.answer(
         f"✅ <b>Ваш запис успішно створено!</b>\n\n"
         f"👤 <b>Ім'я:</b> {data['name']}\n"
@@ -311,7 +506,8 @@ async def get_time(message: Message, state: FSMContext):
         f"💄 <b>Процедура:</b> {data['service']}\n"
         f"📅 <b>Дата:</b> {data['date']}\n"
         f"🕒 <b>Час:</b> {data['time']}\n\n"
-        f"Незабаром майстер зв'яжеться з вами для підтвердження.",
+        "Незабаром майстер зв'яжеться з вами "
+        "для підтвердження.",
         reply_markup=main_menu,
         parse_mode="HTML"
     )

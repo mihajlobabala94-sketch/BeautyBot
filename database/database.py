@@ -25,9 +25,18 @@ def create_database():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             telegram_id INTEGER UNIQUE,
             name TEXT NOT NULL,
-            phone TEXT NOT NULL
+            phone TEXT NOT NULL,
+            photo_id TEXT
         )
     """)
+
+    # Додаємо photo_id до старої бази, якщо колонки ще немає
+    try:
+        cursor.execute(
+            "ALTER TABLE clients ADD COLUMN photo_id TEXT"
+        )
+    except sqlite3.OperationalError:
+        pass
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS bookings (
@@ -219,17 +228,18 @@ def remove_old_slots():
 # КЛІЄНТИ
 # =========================
 
-def add_client(telegram_id, name, phone):
+def add_client(telegram_id, name, phone, photo_id=None):
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO clients (telegram_id, name, phone)
-        VALUES (?, ?, ?)
+        INSERT INTO clients (telegram_id, name, phone, photo_id)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT(telegram_id) DO UPDATE SET
             name = excluded.name,
-            phone = excluded.phone
-    """, (telegram_id, name, phone))
+            phone = excluded.phone,
+            photo_id = COALESCE(excluded.photo_id, clients.photo_id)
+    """, (telegram_id, name, phone, photo_id))
 
     cursor.execute("""
         SELECT id
@@ -620,3 +630,25 @@ def seed_slots():
 
     if count == 0:
         generate_slots_from_settings(advance_days=30)
+
+# =========================
+# Фото клієнтів
+# =========================
+
+def get_clients_with_photos():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, telegram_id, name, phone, photo_id
+        FROM clients
+        WHERE photo_id IS NOT NULL
+          AND photo_id != ''
+        ORDER BY id DESC
+    """)
+
+    clients = cursor.fetchall()
+
+    conn.close()
+
+    return clients

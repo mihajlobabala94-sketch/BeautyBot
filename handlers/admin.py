@@ -15,6 +15,7 @@ from aiogram.types import (
 from config.config import ADMIN_ID as MASTER_ID
 from database.database import (
     add_slot,
+    get_clients_with_photos,
     get_free_dates,
     get_free_times,
     get_free_slots,
@@ -31,7 +32,8 @@ from database.database import (
     get_schedule_settings,
     save_schedule_settings,
     toggle_schedule_day,
-    generate_slots_from_settings
+    generate_slots_from_settings,
+    get_clients_with_photos
 )
 from keyboards.admin import (
     admin_keyboard,
@@ -531,6 +533,51 @@ async def show_free_times(
 
     await callback.answer()
 
+# =========================================================
+# 📸 ФОТО КЛІЄНТІВ
+# =========================================================
+
+@router.message(F.text == "📸 Фото клієнтів")
+async def show_client_photos(message: Message, state: FSMContext):
+    if not is_admin(message):
+        return
+
+    await state.clear()
+
+    clients = get_clients_with_photos()
+
+    if not clients:
+        await message.answer(
+            "📸 Поки що немає клієнтів, які надсилали фото брів.",
+            reply_markup=admin_keyboard
+        )
+        return
+
+    await message.answer(
+        f"📸 <b>Фото клієнтів</b>\n\n"
+        f"Знайдено клієнтів: <b>{len(clients)}</b>",
+        parse_mode="HTML",
+        reply_markup=admin_keyboard
+    )
+
+    for client_id, telegram_id, name, phone, photo_id in clients:
+        try:
+            await message.bot.send_photo(
+                chat_id=message.chat.id,
+                photo=photo_id,
+                caption=(
+                    f"👤 <b>{name}</b>\n"
+                    f"📞 Телефон: {phone}\n"
+                    f"🆔 Telegram ID: {telegram_id}"
+                ),
+                parse_mode="HTML"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Не вдалося надіслати фото клієнта "
+                f"{client_id}: {e}"
+            )
 
 # =========================================================
 # 🕐 ПЕРЕГЛЯД ГОДИНИ

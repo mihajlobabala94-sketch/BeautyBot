@@ -34,3 +34,25 @@ service_keyboard = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True
 )
+
+previous_brows_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="✅ Так"),
+            KeyboardButton(text="❌ Ні")
+        ],
+        [
+            KeyboardButton(text="❌ Скасувати")
+        ]
+    ],
+    resize_keyboard=True
+) 
+
+photo_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="❌ Скасувати")
+        ]
+    ],
+    resize_keyboard=True
+)

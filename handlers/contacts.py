@@ -11,7 +11,7 @@ async def contacts(message: Message):
     await message.answer(
         "☎️ <b>Контакти майстра</b>\n\n"
         "📞 Телефон: +380992058456\n"
-        "📲 Telegram: @beautymaster\n",
+        "📲 Telegram: @slyvkaolenka\n",
         reply_markup=main_menu,
         parse_mode="HTML"
     )
