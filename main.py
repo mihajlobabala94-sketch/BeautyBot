@@ -12,7 +12,10 @@ from handlers.price import router as price_router
 from handlers.reviews import router as reviews_router
 from handlers.services import router as services_router
 from handlers.start import router as start_router
+from handlers.works import router as works_router
+from handlers.faq import router as faq_router
 from services.scheduler import start_background_scheduler
+from handlers.contraindications import router as contraindications_router
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -20,11 +23,14 @@ dp = Dispatcher()
 # Реєстрація роутерів
 dp.include_router(admin_router)
 dp.include_router(start_router)
+dp.include_router(works_router)
 dp.include_router(services_router)
 dp.include_router(price_router)
 dp.include_router(contacts_router)
 dp.include_router(reviews_router)
 dp.include_router(booking_router)
+dp.include_router(faq_router)
+dp.include_router(contraindications_router)
 
 
 async def main():

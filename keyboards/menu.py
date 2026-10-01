@@ -15,8 +15,12 @@ main_menu = ReplyKeyboardMarkup(
             KeyboardButton(text="☎️ Контакти")
         ],
         [
-            KeyboardButton(text="⭐ Відгуки")
-        ]
+            KeyboardButton(text="⭐ Відгуки"),
+            KeyboardButton(text="❓ Часті запитання")
+        ],
+        [
+    KeyboardButton(text="⚠️ Протипоказання")
+        ]   
     ],
     resize_keyboard=True
 )
